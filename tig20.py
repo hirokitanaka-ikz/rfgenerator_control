@@ -76,15 +76,9 @@ class TIG20:
     def _close(self):
         """Close the serial connection."""
         if self.ser and self.ser.is_open:
-            try:
-                # Ensure RF is off before closing
-                self.rf_off() 
-            except Exception as e:
-                self.logger.warning(f"Error attempting to turn RF off during close: {e}")
-            finally:
-                self.ser.close()
-                self.ser = None
-                self.logger.info("Disconnected from TIG 20")
+            self.ser.close()
+            self.ser = None
+            self.logger.info("Disconnected from TIG 20")
 
 
     def _build_frame(self, cmd: int, data: int) -> bytes:
@@ -231,8 +225,16 @@ class TIG20:
 
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        try:
-            self.rf_off()
-        except:
-            pass
+        # If we are exiting due to a communication error (Timeout, etc.),
+        # sending RF OFF is futile and will only cause another timeout.
+        is_comm_error = isinstance(exc_val, (TIG20CommunicationError, serial.SerialTimeoutException))
+        
+        if not is_comm_error:
+            try:
+                self.rf_off()
+            except:
+                pass
+        else:
+            self.logger.warning("Skipping RF OFF commands due to communication error.")
+            
         self._close()

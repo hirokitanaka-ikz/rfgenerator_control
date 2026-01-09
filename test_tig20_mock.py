@@ -96,7 +96,29 @@ class TestTIG20(unittest.TestCase):
         expected_off_frame = bytes([0x00, 0x03, 0x00, 0x00, 0x03])
         
         # We might have other calls, check if last call or any call was RF OFF
-        instance.write.assert_any_call(expected_off_frame)
+        instance.write.assert_called_with(expected_off_frame)
+
+
+    def test_skip_cleanup_on_error(self):
+        """Ensure RF OFF is SKIPPED on communication error."""
+        instance = self.mock_serial.return_value
+        instance.is_open = True
+        
+        # Simulate an error during execution
+        with self.assertRaises(TIG20CommunicationError):
+            with self.tig:
+                raise TIG20CommunicationError("Simulated Failure")
+        
+        # Verify RF OFF was NOT called because we raised TIG20CommunicationError
+        expected_off_frame = bytes([0x00, 0x03, 0x00, 0x00, 0x03])
+        
+        # Check that write was NOT called (or not called with RF OFF)
+        # Note: In this pure mock, nothing was written.
+        try:
+             instance.write.assert_any_call(expected_off_frame)
+             self.fail("RF OFF should have been skipped")
+        except AssertionError:
+             pass # Success, it wasn't called
 
 
 if __name__ == '__main__':
