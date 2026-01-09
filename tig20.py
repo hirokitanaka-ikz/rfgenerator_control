@@ -61,7 +61,11 @@ class TIG20:
                     bytesize=serial.EIGHTBITS,
                     parity=serial.PARITY_NONE,
                     stopbits=serial.STOPBITS_ONE,
-                    timeout=self.timeout
+                    timeout=self.timeout,
+                    write_timeout=self.timeout, # Prevent write from blocking indefinitely
+                    xonxoff=False,
+                    rtscts=False,
+                    dsrdtr=False
                 )
                 self.logger.info(f"Connected to TIG 20 on {self.port}")
             except serial.SerialException as e:
@@ -107,7 +111,11 @@ class TIG20:
             raise TIG20Error("Serial port not open")
         
         self.logger.debug(f"TX: {frame.hex()}")
-        self.ser.write(frame)
+        try:
+            self.ser.write(frame)
+        except serial.SerialTimeoutException as e:
+            self.logger.error(f"Write timeout: {e}")
+            raise TIG20CommunicationError("Write timeout") from e
 
 
     def _read_frame(self) -> dict:

@@ -23,7 +23,11 @@ class TestTIG20(unittest.TestCase):
                 bytesize=8,
                 parity='N',
                 stopbits=1,
-                timeout=1.0
+                timeout=1.0,
+                write_timeout=1.0,
+                xonxoff=False,
+                rtscts=False,
+                dsrdtr=False
             )
 
 

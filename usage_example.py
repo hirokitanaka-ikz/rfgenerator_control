@@ -11,6 +11,7 @@ def main():
 
     try:
         print(f"Connecting to TIG 20 on {PORT}...")
+        print("Note: If the device is not responding, this may take a few seconds to timeout.")
         
         # Using context manager ensures RF is turned OFF upon exit
         with TIG20(PORT) as tig:
