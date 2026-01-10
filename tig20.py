@@ -1,5 +1,4 @@
 import serial
-import time
 import logging
 
 
@@ -161,15 +160,15 @@ class TIG20:
         return self._read_frame()
 
 
-    def set_power(self, power_w: int):
+    def set_power(self, power_percent: int):
         """Set RF output power in watts."""
-        self.logger.info(f"Setting power to {power_w} W")
+        self.logger.info(f"Setting power to {power_percent}%")
         # Assuming data bytes correspond to watts directly
-        self._send_command(CMD_SET_POWER, power_w)
+        self._send_command(CMD_SET_POWER, power_percent)
 
 
     def get_power(self) -> int:
-        """Read back measured RF output power in watts."""
+        """Read back measured RF output power."""
         resp = self._send_command(CMD_GET_POWER)
         return resp['data']
 
