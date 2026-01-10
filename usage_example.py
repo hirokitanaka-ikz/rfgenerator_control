@@ -9,43 +9,59 @@ def main():
     # Update COM port as needed
     PORT = 'COM3' 
 
+    tig = TIG20(PORT)
+
     try:
         print(f"Connecting to TIG 20 on {PORT}...")
         print("Note: If the device is not responding, this may take a few seconds to timeout.")
         
-        # Using context manager ensures RF is turned OFF upon exit
-        with TIG20(PORT) as tig:
+        # Manual connection
+        tig.open()
             
-            # 1. Check status
-            status = tig.get_status()
-            print(f"Initial Status: {status}")
+        # 1. Check status
+        status = tig.get_status()
+        print(f"Initial Status: {status}")
 
-            if status['error']:
-                print("Error detected! Aborting.")
-                return
+        if status['error']:
+            print("Error detected! Aborting.")
+            return
 
-            # 2. Set Power
-            target_power = 50 # Watts
-            print(f"Setting power to {target_power} W...")
-            tig.set_power(target_power)
+        # 2. Set Power
+        target_power = 50 # Watts
+        print(f"Setting power to {target_power} W...")
+        tig.set_power(target_power)
 
-            # 3. Enable RF
-            print("Turning RF ON...")
-            tig.rf_on()
-            
-            # 4. Monitor Loop
-            for i in range(5):
-                time.sleep(1)
-                actual_power = tig.get_power()
-                print(f"[{i+1}/5] Measured Power: {actual_power} W")
-            
-            # 5. Context manager will automatically call rf_off() and close() here
-            print("Finished sequence. RF should turn off now.")
+        # 3. Enable RF
+        print("Turning RF ON...")
+        tig.rf_on()
+        
+        # 4. Monitor Loop
+        for i in range(5):
+            time.sleep(1)
+            actual_power = tig.get_power()
+            print(f"[{i+1}/5] Measured Power: {actual_power} W")
+        
+        print("Finished sequence.")
 
     except TIG20Error as e:
         print(f"Communication Error: {e}")
     except Exception as e:
         print(f"Unexpected Error: {e}")
+    finally:
+        # CRITICAL: Always close the connection in finally block.
+        # This ensures RF is turned OFF (if not skipped by error logic) and port is closed.
+        if tig:
+            print("Closing connection...")
+            # Note: You might want to call rf_off() explicitly here if you are not relying
+            # on the smart cleanup logic that was inside __exit__. 
+            # But close() itself purely closes the port in the new logic.
+            # To be safe in manual mode, we should try to turn RF off if possible.
+            try:
+                tig.rf_off()
+            except:
+                pass # Ignore errors during cleanup
+            
+            tig.close()
 
 if __name__ == "__main__":
     main()

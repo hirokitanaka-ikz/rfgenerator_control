@@ -51,8 +51,8 @@ class TIG20:
         self.logger = logging.getLogger(__name__)
 
 
-    def _open(self):
-        """Open the serial connection."""
+    def open(self):
+        """Open the serial connection manually."""
         if self.ser is None:
             try:
                 self.ser = serial.Serial(
@@ -73,8 +73,8 @@ class TIG20:
                 raise TIG20Error(f"Could not open port {self.port}") from e
 
 
-    def _close(self):
-        """Close the serial connection."""
+    def close(self):
+        """Close the serial connection manually."""
         if self.ser and self.ser.is_open:
             self.ser.close()
             self.ser = None
@@ -216,11 +216,11 @@ class TIG20:
         except:
             pass
         finally:
-            self._close()
+            self.close()
 
 
     def __enter__(self):
-        self._open()
+        self.open()
         return self
 
 
@@ -237,4 +237,4 @@ class TIG20:
         else:
             self.logger.warning("Skipping RF OFF commands due to communication error.")
             
-        self._close()
+        self.close()

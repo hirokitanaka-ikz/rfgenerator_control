@@ -1,6 +1,5 @@
 import unittest
 from unittest.mock import MagicMock, patch
-import tig20
 from tig20 import TIG20, TIG20Error, TIG20CommunicationError
 
 
