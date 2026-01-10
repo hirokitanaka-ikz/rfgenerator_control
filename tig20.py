@@ -2,18 +2,24 @@ import serial
 import logging
 
 
-# --- Constants & Placeholders ---
-# IMPORTANT: Update these values from the hardware manual!
-CMD_SET_POWER = 0x01  # Placeholder
-CMD_RF_ON = 0x02      # Placeholder
-CMD_RF_OFF = 0x03     # Placeholder
-CMD_GET_STATUS = 0x04 # Placeholder
-CMD_GET_POWER = 0x05  # Placeholder
+# --- Constants ---
+# Command Codes
+CMD_SETPOINT_WRITE = 0x43
+CMD_SETPOINT_READ = 0xC3
+CMD_LIMIT_UDC_WRITE = 0x44
+CMD_LIMIT_UDC_READ = 0xC4
+CMD_LIMIT_IDC_WRITE = 0x45
+CMD_LIMIT_IDC_READ = 0xC5
+CMD_LIMIT_PDC_WRITE = 0x46
+CMD_LIMIT_PDC_READ = 0xC6
+CMD_MODE_WRITE = 0x4D
+CMD_MODE_READ = 0xCD
+CMD_OPERATION_WRITE = 0x4F
+CMD_OPERATION_READ = 0xCF
+CMD_RESET_ERROR = 0x51
+CMD_GET_STATUS = 0xE1
 
-# Response validation
-ACK = 0x06 # Placeholder for Acknowledge if applicable, though spec says fixed frame response
-
-# BAUDRATE
+# Constants
 BAUDRATE = 9600
 
 
@@ -160,52 +166,160 @@ class TIG20:
         return self._read_frame()
 
 
-    def set_power(self, power_percent: int):
-        """Set RF output power in watts."""
-        self.logger.info(f"Setting power to {power_percent}%")
-        # Assuming data bytes correspond to watts directly
-        self._send_command(CMD_SET_POWER, power_percent)
+    def write_setpoint(self, permille: int):
+        """
+        Write Setpoint (U/I/P depending on mode).
+        Range: 0 ... 1000 (representing 0.0% to 100.0%)
+        """
+        if not (0 <= permille <= 1000):
+            raise ValueError("Setpoint must be between 0 and 1000")
+        self.logger.info(f"Writing setpoint: {permille}")
+        self._send_command(CMD_SETPOINT_WRITE, permille)
 
-
-    def get_power(self) -> int:
-        """Read back measured RF output power."""
-        resp = self._send_command(CMD_GET_POWER)
+    def read_setpoint(self) -> int:
+        """Read current Setpoint (0 ... 1000)."""
+        resp = self._send_command(CMD_SETPOINT_READ)
         return resp['data']
 
+    def write_limit_voltage(self, permille: int):
+        """Write UDC (voltage) limit (0 ... 1000)."""
+        if not (0 <= permille <= 1000):
+            raise ValueError("Limit must be between 0 and 1000")
+        self.logger.info(f"Writing UDC limit: {permille}")
+        self._send_command(CMD_LIMIT_UDC_WRITE, permille)
+
+    def read_limit_voltage(self) -> int:
+        """Read UDC (voltage) limit (0 ... 1000)."""
+        resp = self._send_command(CMD_LIMIT_UDC_READ)
+        return resp['data']
+
+    def write_limit_current(self, permille: int):
+        """Write IDC (current) limit (0 ... 1000)."""
+        if not (0 <= permille <= 1000):
+            raise ValueError("Limit must be between 0 and 1000")
+        self.logger.info(f"Writing IDC limit: {permille}")
+        self._send_command(CMD_LIMIT_IDC_WRITE, permille)
+
+    def read_limit_current(self) -> int:
+        """Read IDC (current) limit (0 ... 1000)."""
+        resp = self._send_command(CMD_LIMIT_IDC_READ)
+        return resp['data']
+
+    def write_limit_power(self, permille: int):
+        """Write PDC (power) limit (0 ... 1000)."""
+        if not (0 <= permille <= 1000):
+            raise ValueError("Limit must be between 0 and 1000")
+        self.logger.info(f"Writing PDC limit: {permille}")
+        self._send_command(CMD_LIMIT_PDC_WRITE, permille)
+
+    def read_limit_power(self) -> int:
+        """Read PDC (power) limit (0 ... 1000)."""
+        resp = self._send_command(CMD_LIMIT_PDC_READ)
+        return resp['data']
+
+    def set_control_mode(self, mode: int):
+        """
+        Set Generator control mode.
+        0 = UDC
+        1 = IDC
+        2 = PDC
+        """
+        if mode not in [0, 1, 2]:
+            raise ValueError("Mode must be 0 (UDC), 1 (IDC), or 2 (PDC)")
+        self.logger.info(f"Setting control mode to {mode}")
+        self._send_command(CMD_MODE_WRITE, mode)
+
+    def get_control_mode_setting(self) -> int:
+        """
+        Read Generator control mode setting.
+        Returns: 0 (UDC), 1 (IDC), or 2 (PDC)
+        """
+        resp = self._send_command(CMD_MODE_READ)
+        return resp['data']
+
+    def reset_error(self):
+        """Send Reset Error command."""
+        self.logger.info("Resetting error")
+        self._send_command(CMD_RESET_ERROR, 1)
 
     def rf_on(self):
-        """Enable RF output."""
+        """Enable RF output (Operation ON)."""
         self.logger.info("Turning RF ON")
-        self._send_command(CMD_RF_ON)
-
+        self._send_command(CMD_OPERATION_WRITE, 1)
 
     def rf_off(self):
-        """Disable RF output."""
+        """Disable RF output (Operation OFF)."""
         self.logger.info("Turning RF OFF")
         # We try to send command, but if communication is broken, we can't do much more.
         try:
-            self._send_command(CMD_RF_OFF)
+            self._send_command(CMD_OPERATION_WRITE, 0)
         except TIG20Error as e:
             self.logger.error(f"Failed to send RF OFF command: {e}")
             raise
 
+    def is_rf_on_set(self) -> bool:
+        """Check if RF Operation is set to ON."""
+        resp = self._send_command(CMD_OPERATION_READ)
+        return resp['data'] == 1
 
     def get_status(self) -> dict:
         """
         Query operating status.
-        Returns dict with status flags.
+        Returns dict with status flags detailed in protocol.
         """
         resp = self._send_command(CMD_GET_STATUS)
         data = resp['data']
         
-        # Decoding depends on specific bit definitions in manual.
-        # Placeholder implementation:
-        return {
-            'rf_on': bool(data & 0x01),
-            'error': bool(data & 0x02),
-            'interlock': bool(data & 0x04)
-        }
+        # High byte: Bits 8-15
+        high_byte = (data >> 8) & 0xFF
+        # Low byte: Bits 0-7
+        low_byte = data & 0xFF
 
+        # Parse High Byte
+        # Bit 7: Setpoint: 0=internal, 1=external
+        setpoint_external = bool(high_byte & 0x80)
+        # Bit 6: Circuit: 0=not ready, 1=ready
+        circuit_ready = bool(high_byte & 0x40)
+        # Bit 4: Frequency limit: 0=off, 1=on
+        freq_limit_active = bool(high_byte & 0x10)
+        # Bit 3: PE limit: 0=off, 1=on
+        pe_limit_active = bool(high_byte & 0x08)
+        
+        # Bits 0-2: Remote control
+        rc_bits = high_byte & 0x07
+        remote_control = "unknown"
+        if rc_bits == 0: remote_control = "free"
+        elif rc_bits == 1: remote_control = "internal"
+        elif rc_bits == 2: remote_control = "AD_interface"
+        elif rc_bits == 3: remote_control = "RS232"
+        elif rc_bits == 4: remote_control = "RS485"
+        elif rc_bits == 5: remote_control = "Profibus"
+
+        # Parse Low Byte
+        # Bits 5-7: Control mode active
+        cm_bits = (low_byte >> 5) & 0x07
+        control_mode_active = "unknown"
+        if cm_bits == 0: control_mode_active = "UDC"
+        elif cm_bits == 1: control_mode_active = "IDC"
+        elif cm_bits == 2: control_mode_active = "PDC"
+        
+        # Bit 1: 0=Tastung on (sampling), 1=off
+        sampling_off = bool(low_byte & 0x02)
+        # Bit 0: 0=Schütz off (contactor), 1=on
+        contactor_on = bool(low_byte & 0x01)
+
+        return {
+            'setpoint_external': setpoint_external,
+            'circuit_ready': circuit_ready,
+            'freq_limit_active': freq_limit_active,
+            'pe_limit_active': pe_limit_active,
+            'remote_control': remote_control,
+            'control_mode_active': control_mode_active,
+            'sampling_off': sampling_off,
+            'contactor_on': contactor_on,
+            # Raw data for debug if needed
+            'raw_status_code': data
+        }
 
     def emergency_off(self):
         """Force RF OFF and close connection."""

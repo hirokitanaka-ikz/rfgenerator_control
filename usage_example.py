@@ -26,10 +26,13 @@ def main():
             print("Error detected! Aborting.")
             return
 
-        # 2. Set Power
-        target_power = 50 # Watts
-        print(f"Setting power to {target_power} W...")
-        tig.set_power(target_power)
+        # 2. Set Setpoint (Power/Voltage/Current depending on mode)
+        # Assuming we are in a mode where setpoint means power (permille)
+        # 50 Watts -> If max is 1000W, 50 permille? Or is permille 0-100%?
+        # Protocol says 0...1000 permille.
+        target_setpoint = 50 
+        print(f"Writing setpoint to {target_setpoint} (permille)...")
+        tig.write_setpoint(target_setpoint)
 
         # 3. Enable RF
         print("Turning RF ON...")
@@ -38,8 +41,10 @@ def main():
         # 4. Monitor Loop
         for i in range(5):
             time.sleep(1)
-            actual_power = tig.get_power()
-            print(f"[{i+1}/5] Measured Power: {actual_power} W")
+            actual_setpoint = tig.read_setpoint()
+            # Also read actual power limit if desired
+            # p_limit = tig.read_limit_power()
+            print(f"[{i+1}/5] Read Setpoint: {actual_setpoint}")
         
         print("Finished sequence.")
 

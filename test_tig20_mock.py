@@ -41,15 +41,11 @@ class TestTIG20(unittest.TestCase):
 
     def test_rf_on_success(self):
         """Test sending RF ON command with valid response."""
-        # Setup mock read return value (address, cmd, data_h, data_l, chk)
-        # Echo back command as success? Spec says fixed frame response.
-        # Let's assume response mirrors command for simplicity in this mock, 
-        # or has some standard ACK. Since we didn't firmly define response content
-        # beyond "5 bytes", let's craft a valid checksum response.
-        
-        # CMD_RF_ON = 0x02
-        # Response: ADR=0, CMD=2, Data=0, CHK=2
-        response_bytes = bytes([0x00, 0x02, 0x00, 0x00, 0x02])
+        # CMD_OPERATION_WRITE = 0x4F (79)
+        # Data = 1
+        # Checksum = 0 + 79 + 0 + 1 = 80 (0x50)
+        # Response: ADR=0, CMD=0x4F, Data=1, CHK=0x50
+        response_bytes = bytes([0x00, 0x4F, 0x00, 0x01, 0x50])
         
         instance = self.mock_serial.return_value
         instance.is_open = True
@@ -59,16 +55,15 @@ class TestTIG20(unittest.TestCase):
             self.tig.rf_on()
             
             # Verify write called with correct frame
-            # 0+2+0+0 = 2 checksum
-            expected_tx = bytes([0x00, 0x02, 0x00, 0x00, 0x02])
+            expected_tx = bytes([0x00, 0x4F, 0x00, 0x01, 0x50])
             instance.write.assert_called_with(expected_tx)
 
 
     def test_checksum_error(self):
         """Test that bad checksum raises exception."""
         # Response with bad checksum
-        # ADR=0, CMD=2, Data=0, CHK=99 (should be 2)
-        response_bytes = bytes([0x00, 0x02, 0x00, 0x00, 0x99])
+        # ADR=0, CMD=0x4F, Data=1, CHK=99 (should be 0x50)
+        response_bytes = bytes([0x00, 0x4F, 0x00, 0x01, 0x99])
         
         instance = self.mock_serial.return_value
         instance.is_open = True
@@ -84,17 +79,16 @@ class TestTIG20(unittest.TestCase):
         instance = self.mock_serial.return_value
         instance.is_open = True
         # Setup read for the implicit rf_off call at exit
-        # CMD_RF_OFF = 0x03. Checksum = 3.
-        instance.read.return_value = bytes([0x00, 0x03, 0x00, 0x00, 0x03])
+        # CMD_OPERATION_WRITE = 0x4F. Data=0. Checksum = 79 (0x4F).
+        instance.read.return_value = bytes([0x00, 0x4F, 0x00, 0x00, 0x4F])
 
         with self.tig:
             pass # Just enter and exit
         
-        # Verify rf_off was called (CMD_RF_OFF = 0x03)
+        # Verify rf_off was called
         # Check if write was called with RF OFF frame
-        expected_off_frame = bytes([0x00, 0x03, 0x00, 0x00, 0x03])
+        expected_off_frame = bytes([0x00, 0x4F, 0x00, 0x00, 0x4F])
         
-        # We might have other calls, check if last call or any call was RF OFF
         instance.write.assert_called_with(expected_off_frame)
 
 
@@ -109,7 +103,7 @@ class TestTIG20(unittest.TestCase):
                 raise TIG20CommunicationError("Simulated Failure")
         
         # Verify RF OFF was NOT called because we raised TIG20CommunicationError
-        expected_off_frame = bytes([0x00, 0x03, 0x00, 0x00, 0x03])
+        expected_off_frame = bytes([0x00, 0x4F, 0x00, 0x00, 0x4F])
         
         # Check that write was NOT called (or not called with RF OFF)
         # Note: In this pure mock, nothing was written.
