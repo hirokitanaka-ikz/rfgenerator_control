@@ -1,32 +1,17 @@
-from tig20 import TIG20, TIG20Error
-import logging
+from PyQt6.QtWidgets import QApplication
+import sys
+from tig20_widget import TIG20Widget
+
+def main():
+    app = QApplication(sys.argv)
+    
+    # Create the widget and show it as a top-level window
+    widget = TIG20Widget()
+    widget.setWindowTitle("TIG 20 Control Panel")
+    widget.resize(500, 300)
+    widget.show()
+    
+    sys.exit(app.exec())
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-    PORT = 'COM4'  # Update as needed
-
-    tig = TIG20(PORT)
-
-    try:
-        print(f"Connecting to TIG 20 on {PORT}...")
-        tig.open()
-        status = tig.get_status()
-        print(f"Status: {status}")
-
-        tig.rf_on()
-        tig.set_control_mode(0)
-        tig.write_setpoint(50)
-        print(tig.read_actual_voltage())
-        print(tig.read_actual_current())
-        print(tig.read_actual_power())
-
-
-
-        tig.rf_off()
-        
-    except TIG20Error as e:
-        print(f"Communication Error: {e}")
-    finally:
-        if tig:
-            print("Closing connection...")
-            tig.close()
+    main()
