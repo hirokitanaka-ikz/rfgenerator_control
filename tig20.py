@@ -98,7 +98,7 @@ class TIG20:
         data_h = (data >> 8) & 0xFF
         data_l = data & 0xFF
         
-        checksum = (self.address + cmd + data_h + data_l) & 0xFF
+        checksum = self.address ^ cmd ^ data_h ^ data_l
         
         frame = bytearray([self.address, cmd, data_h, data_l, checksum])
         return bytes(frame)
@@ -140,7 +140,7 @@ class TIG20:
         chk_rx = response[4]
 
         data = (data_h << 8) | data_l
-        chk_calc = (addr + cmd + data_h + data_l) & 0xFF
+        chk_calc = addr ^ cmd ^ data_h ^ data_l
         
         checksum_ok = (chk_rx == chk_calc)
 

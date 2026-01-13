@@ -7,7 +7,7 @@ class TestTIG20(unittest.TestCase):
     def setUp(self):
         self.mock_serial_patcher = patch('serial.Serial')
         self.mock_serial = self.mock_serial_patcher.start()
-        self.tig = TIG20('COM3')
+        self.tig = TIG20('COM4')
 
 
     def tearDown(self):
@@ -17,7 +17,7 @@ class TestTIG20(unittest.TestCase):
     def test_open_connection(self):
         with self.tig:
             self.mock_serial.assert_called_with(
-                port='COM3',
+                port='COM4',
                 baudrate=9600,
                 bytesize=8,
                 parity='N',
@@ -33,7 +33,8 @@ class TestTIG20(unittest.TestCase):
     def test_build_frame(self):
         """Test frame construction manually."""
         # ADR=0, CMD=1, DATA=50 (0x32, H=0, L=0x32)
-        # Checksum = 0 + 1 + 0 + 50 = 51 (0x33)
+        # ADR=0, CMD=1, DATA=50 (0x32, H=0, L=0x32)
+        # Checksum = 0 ^ 1 ^ 0 ^ 50 = 51 (0x33)
         frame = self.tig._build_frame(cmd=0x01, data=50)
         expected = bytes([0x00, 0x01, 0x00, 0x32, 0x33])
         self.assertEqual(frame, expected)
@@ -43,9 +44,11 @@ class TestTIG20(unittest.TestCase):
         """Test sending RF ON command with valid response."""
         # CMD_OPERATION_WRITE = 0x4F (79)
         # Data = 1
-        # Checksum = 0 + 79 + 0 + 1 = 80 (0x50)
-        # Response: ADR=0, CMD=0x4F, Data=1, CHK=0x50
-        response_bytes = bytes([0x00, 0x4F, 0x00, 0x01, 0x50])
+        # CMD_OPERATION_WRITE = 0x4F (79)
+        # Data = 1
+        # Checksum = 0 ^ 79 ^ 0 ^ 1 = 78 (0x4E)
+        # Response: ADR=0, CMD=0x4F, Data=1, CHK=0x4E
+        response_bytes = bytes([0x00, 0x4F, 0x00, 0x01, 0x4E])
         
         instance = self.mock_serial.return_value
         instance.is_open = True
@@ -55,14 +58,14 @@ class TestTIG20(unittest.TestCase):
             self.tig.rf_on()
             
             # Verify write called with correct frame
-            expected_tx = bytes([0x00, 0x4F, 0x00, 0x01, 0x50])
+            expected_tx = bytes([0x00, 0x4F, 0x00, 0x01, 0x4E])
             instance.write.assert_called_with(expected_tx)
 
 
     def test_checksum_error(self):
         """Test that bad checksum raises exception."""
         # Response with bad checksum
-        # ADR=0, CMD=0x4F, Data=1, CHK=99 (should be 0x50)
+        # ADR=0, CMD=0x4F, Data=1, CHK=99 (should be 0x4E)
         response_bytes = bytes([0x00, 0x4F, 0x00, 0x01, 0x99])
         
         instance = self.mock_serial.return_value

@@ -7,7 +7,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 def main():
     # Update COM port as needed
-    PORT = 'COM3' 
+    PORT = 'COM4' 
 
     tig = TIG20(PORT)
 
