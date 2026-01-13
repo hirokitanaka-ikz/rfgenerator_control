@@ -14,6 +14,14 @@ if __name__ == "__main__":
         print(f"Status: {status}")
 
         tig.rf_on()
+        tig.set_control_mode(0)
+        tig.write_setpoint(50)
+        print(tig.read_actual_voltage())
+        print(tig.read_actual_current())
+        print(tig.read_actual_power())
+
+
+
         tig.rf_off()
         
     except TIG20Error as e:

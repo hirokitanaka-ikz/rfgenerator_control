@@ -77,6 +77,7 @@ class TIG20:
                     dsrdtr=False
                 )
                 self.logger.info(f"Connected to TIG 20 on {self.port}")
+                self._set_contactor(True)
             except serial.SerialException as e:
                 self.logger.error(f"Failed to open serial port {self.port}: {e}")
                 raise TIG20Error(f"Could not open port {self.port}") from e
@@ -286,7 +287,7 @@ class TIG20:
         resp = self._send_command(CMD_ACTUAL_FREQ_READ)
         return resp['data']
 
-    def set_contactor(self, activate: bool):
+    def _set_contactor(self, activate: bool):
         """
         Set Contactor (Schütz) state.
         Args:

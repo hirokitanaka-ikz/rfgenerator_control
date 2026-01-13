@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (
     QProgressBar, QMessageBox, QGridLayout
 )
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal
+from PyQt6.QtGui import QFont
 from PyQt6.QtSerialPort import QSerialPortInfo
 import logging
 
@@ -35,6 +36,15 @@ class TIG20Widget(QGroupBox):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._poll_status)
         self.poll_interval = 500 # ms
+
+        # Timer for ramping
+        self.ramp_timer = QTimer(self)
+        self.ramp_timer.timeout.connect(self._ramp_step)
+        self.ramp_interval = 1000  # 1 second step
+        self.ramp_start_value = 0
+        self.ramp_target_value = 0
+        self.ramp_start_time = None
+        self.ramp_total_seconds = 0
 
     def _init_ui(self):
         layout = QVBoxLayout()
@@ -94,16 +104,68 @@ class TIG20Widget(QGroupBox):
         layout.addLayout(controls_layout)
 
         # --- Monitor Section (Bars) ---
-        # Note: These show LIMITS/SETPOINTS because actual values aren't readable via protocol
-        
-        self.bar_udc = self._create_bar("UDC Limit")
+        self.bar_udc = self._create_bar("Actual UDC")
         layout.addLayout(self.bar_udc['layout'])
         
-        self.bar_idc = self._create_bar("IDC Limit")
+        self.bar_idc = self._create_bar("Actual IDC")
         layout.addLayout(self.bar_idc['layout'])
         
-        self.bar_pdc = self._create_bar("PDC Limit")
+        self.bar_pdc = self._create_bar("Actual PDC")
         layout.addLayout(self.bar_pdc['layout'])
+
+        # --- Display Section (Refined Labels) ---
+        display_layout = QHBoxLayout()
+        small_font = QFont()
+        small_font.setPointSize(12)
+        small_font.setBold(True)
+
+        self.lbl_display_mode = QLabel("MODE: ---")
+        self.lbl_display_mode.setFont(small_font)
+        self.lbl_display_mode.setStyleSheet("color: black;")
+
+        self.lbl_display_setpoint = QLabel("SET: --.- %")
+        self.lbl_display_setpoint.setFont(small_font)
+        self.lbl_display_setpoint.setStyleSheet("color: black;")
+
+        display_layout.addWidget(self.lbl_display_mode)
+        display_layout.addStretch()
+        display_layout.addWidget(self.lbl_display_setpoint)
+        
+        layout.addLayout(display_layout)
+
+        # --- Ramp Control Section ---
+        ramp_group = QGroupBox("Ramp Control")
+        ramp_layout = QGridLayout(ramp_group)
+
+        self.spin_target_setpoint = QDoubleSpinBox()
+        self.spin_target_setpoint.setRange(0.0, 100.0)
+        self.spin_target_setpoint.setSingleStep(0.1)
+        self.spin_target_setpoint.setSuffix(" %")
+
+        self.spin_ramp_time = QDoubleSpinBox()
+        self.spin_ramp_time.setRange(0.001, 24.0)
+        self.spin_ramp_time.setSingleStep(0.01)
+        self.spin_ramp_time.setDecimals(3)
+        self.spin_ramp_time.setSuffix(" h")
+        self.spin_ramp_time.setValue(0.01)  # Default 36 seconds
+
+        self.btn_ramp_execute = QPushButton("Execute")
+        self.btn_ramp_stop = QPushButton("Stop")
+        self.btn_ramp_stop.setEnabled(False)
+
+        self.bar_ramp_progress = QProgressBar()
+        self.bar_ramp_progress.setRange(0, 100)
+        self.bar_ramp_progress.setValue(0)
+
+        ramp_layout.addWidget(QLabel("Target:"), 0, 0)
+        ramp_layout.addWidget(self.spin_target_setpoint, 0, 1)
+        ramp_layout.addWidget(QLabel("Time:"), 0, 2)
+        ramp_layout.addWidget(self.spin_ramp_time, 0, 3)
+        ramp_layout.addWidget(self.btn_ramp_execute, 1, 0, 1, 2)
+        ramp_layout.addWidget(self.btn_ramp_stop, 1, 2, 1, 2)
+        ramp_layout.addWidget(self.bar_ramp_progress, 2, 0, 1, 4)
+
+        layout.addWidget(ramp_group)
 
         self._refresh_ports()
         self._update_ui_state(False)
@@ -134,7 +196,9 @@ class TIG20Widget(QGroupBox):
         self.btn_rf.clicked.connect(self._toggle_rf)
         self.combo_mode.currentIndexChanged.connect(self._change_mode)
         self.btn_set_setpoint.clicked.connect(self._write_setpoint)
-        # Also write setpoint on spinbox editingFinished? Maybe too frequent. Keep button for now.
+        # Ramp connections
+        self.btn_ramp_execute.clicked.connect(self._start_ramp)
+        self.btn_ramp_stop.clicked.connect(self._stop_ramp)
         
     def _refresh_ports(self):
         current = self.combo_ports.currentText()
@@ -197,6 +261,9 @@ class TIG20Widget(QGroupBox):
         self.combo_mode.setEnabled(enabled)
         self.spin_setpoint.setEnabled(enabled)
         self.btn_set_setpoint.setEnabled(enabled)
+        self.spin_target_setpoint.setEnabled(enabled)
+        self.spin_ramp_time.setEnabled(enabled)
+        self.btn_ramp_execute.setEnabled(enabled)
         
         if not enabled:
             self.lbl_rf_status.setText("OFF")
@@ -213,6 +280,8 @@ class TIG20Widget(QGroupBox):
             self.combo_mode.blockSignals(True)
             if mode in [0, 1, 2]:
                 self.combo_mode.setCurrentIndex(mode)
+                mode_names = ["UDC", "IDC", "PDC"]
+                self.lbl_display_mode.setText(f"MODE: {mode_names[mode]}")
             self.combo_mode.blockSignals(False)
 
             # Setpoint
@@ -220,9 +289,11 @@ class TIG20Widget(QGroupBox):
             self.spin_setpoint.setValue(sp / 10.0)
 
             # Limits
-            self._update_bar_value(self.bar_udc, self.tig20.read_limit_voltage())
-            self._update_bar_value(self.bar_idc, self.tig20.read_limit_current())
-            self._update_bar_value(self.bar_pdc, self.tig20.read_limit_power())
+            # Initial Actual Values (limits are separate, maybe we want to see them too? 
+            # But the UI bar spots are now claimed for Actuals)
+            self._update_bar_value(self.bar_udc, self.tig20.read_actual_voltage())
+            self._update_bar_value(self.bar_idc, self.tig20.read_actual_current())
+            self._update_bar_value(self.bar_pdc, self.tig20.read_actual_power())
             
         except Exception as e:
             self.logger.error(f"Initial read failed: {e}")
@@ -247,6 +318,9 @@ class TIG20Widget(QGroupBox):
             self.lbl_rf_status.setText(text)
             self.lbl_rf_status.setStyleSheet(f"background-color: {color}; color: white; border-radius: 5px; padding: 2px;")
             
+            # Lock Mode Selection during RF ON
+            self.combo_mode.setEnabled(not is_on)
+
             # Sync button state if changed externally?
             # self.btn_rf.setChecked(is_on) # Optional: might interfere with user interaction
             
@@ -256,6 +330,25 @@ class TIG20Widget(QGroupBox):
         except Exception as e:
             self.logger.error(f"Poll status error: {e}")
             # If excessive errors, maybe disconnect?
+
+        # Poll Actual Values
+        try:
+             self._update_bar_value(self.bar_udc, self.tig20.read_actual_voltage())
+             self._update_bar_value(self.bar_idc, self.tig20.read_actual_current())
+             self._update_bar_value(self.bar_pdc, self.tig20.read_actual_power())
+        except Exception as e:
+             self.logger.error(f"Poll actuals error: {e}")
+
+        # Update Mode from Status if needed
+        # status['control_mode_active'] -> "UDC", "IDC", "PDC", "unknown"
+        # Label is updated in _change_mode and _initial_read, not here (to avoid overwrite)
+
+        # Update Setpoint Display Label
+        try:
+            sp = self.tig20.read_setpoint()
+            self.lbl_display_setpoint.setText(f"SET: {sp/10.0:.1f} %")
+        except:
+            pass
 
     def _toggle_rf(self):
         if not self.tig20: return
@@ -272,6 +365,11 @@ class TIG20Widget(QGroupBox):
             self.btn_rf.setChecked(not want_on)
 
     def _change_mode(self, index):
+        # Update display label immediately (even if not connected)
+        mode_names = ["UDC", "IDC", "PDC"]
+        if 0 <= index < len(mode_names):
+            self.lbl_display_mode.setText(f"MODE: {mode_names[index]}")
+        
         if not self.tig20: return
         try:
             self.tig20.set_control_mode(index)
@@ -286,6 +384,81 @@ class TIG20Widget(QGroupBox):
             self.tig20.write_setpoint(permille)
         except Exception as e:
             self.logger.error(f"Write setpoint error: {e}")
+
+    def _start_ramp(self):
+        if not self.tig20: return
+        
+        import time
+        
+        # Get current setpoint and target
+        try:
+            self.ramp_start_value = self.tig20.read_setpoint() / 10.0  # Convert to %
+        except Exception as e:
+            self.logger.error(f"Could not read current setpoint: {e}")
+            return
+        
+        self.ramp_target_value = self.spin_target_setpoint.value()
+        self.ramp_total_seconds = self.spin_ramp_time.value() * 3600  # hours to seconds
+        self.ramp_start_time = time.time()
+        
+        # Update UI state
+        self.btn_ramp_execute.setEnabled(False)
+        self.btn_ramp_stop.setEnabled(True)
+        self.spin_target_setpoint.setEnabled(False)
+        self.spin_ramp_time.setEnabled(False)
+        self.spin_setpoint.setEnabled(False)
+        self.btn_set_setpoint.setEnabled(False)
+        self.bar_ramp_progress.setValue(0)
+        
+        self.logger.info(f"Starting ramp: {self.ramp_start_value:.1f}% -> {self.ramp_target_value:.1f}% over {self.ramp_total_seconds:.1f}s")
+        self.ramp_timer.start(self.ramp_interval)
+
+    def _stop_ramp(self):
+        self.ramp_timer.stop()
+        
+        # Update UI state
+        self.btn_ramp_execute.setEnabled(self.is_connected)
+        self.btn_ramp_stop.setEnabled(False)
+        self.spin_target_setpoint.setEnabled(self.is_connected)
+        self.spin_ramp_time.setEnabled(self.is_connected)
+        self.spin_setpoint.setEnabled(self.is_connected)
+        self.btn_set_setpoint.setEnabled(self.is_connected)
+        
+        self.logger.info("Ramp stopped")
+
+    def _ramp_step(self):
+        if not self.tig20:
+            self._stop_ramp()
+            return
+        
+        import time
+        
+        elapsed = time.time() - self.ramp_start_time
+        
+        if elapsed >= self.ramp_total_seconds:
+            # Ramp complete
+            progress = 100
+            current_setpoint = self.ramp_target_value
+            self._stop_ramp()
+        else:
+            # Calculate current setpoint based on linear interpolation
+            ratio = elapsed / self.ramp_total_seconds
+            progress = int(ratio * 100)
+            current_setpoint = self.ramp_start_value + (self.ramp_target_value - self.ramp_start_value) * ratio
+        
+        # Update progress bar
+        self.bar_ramp_progress.setValue(progress)
+        
+        # Write setpoint to device
+        permille = int(current_setpoint * 10)
+        try:
+            self.tig20.write_setpoint(permille)
+            # Update spin box to reflect current value
+            self.spin_setpoint.blockSignals(True)
+            self.spin_setpoint.setValue(current_setpoint)
+            self.spin_setpoint.blockSignals(False)
+        except Exception as e:
+            self.logger.error(f"Ramp step write error: {e}")
 
     def _update_bar_value(self, bar_dict, permille):
         bar_dict['bar'].setValue(permille)
