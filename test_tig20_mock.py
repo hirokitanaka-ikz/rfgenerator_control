@@ -203,5 +203,53 @@ class TestTIG20(unittest.TestCase):
             instance.write.assert_called_with(expected_tx)
 
 
+
+    def test_set_contactor(self):
+        """Test setting contactor."""
+        # CMD_CONTACTOR_WRITE = 0x50
+        # Data = 1 (Activate)
+        # Checksum = 0 ^ 0x50 ^ 0 ^ 1 = 0x51
+        
+        response_bytes = bytes([0x00, 0x50, 0x00, 0x01, 0x51])
+        instance = self.mock_serial.return_value
+        instance.is_open = True
+        instance.read.return_value = response_bytes
+        
+        with self.tig:
+            self.tig.set_contactor(True)
+            expected_tx = bytes([0x00, 0x50, 0x00, 0x01, 0x51])
+            instance.write.assert_called_with(expected_tx)
+
+        # Test Deactivate
+        # Data = 0
+        # Checksum = 0 ^ 0x50 ^ 0 ^ 0 = 0x50
+        response_bytes_off = bytes([0x00, 0x50, 0x00, 0x00, 0x50])
+        instance.read.return_value = response_bytes_off
+        
+        with self.tig:
+            self.tig.set_contactor(False)
+            expected_tx_off = bytes([0x00, 0x50, 0x00, 0x00, 0x50])
+            instance.write.assert_called_with(expected_tx_off)
+
+
+    def test_get_contactor(self):
+        """Test reading contactor state."""
+        # CMD_CONTACTOR_READ = 0xD0
+        # Response Data = 1 (Activated)
+        # Checksum = 0 ^ 0xD0 ^ 0 ^ 1 = 0xD1
+        # D0 ^ 1 = 11010000 ^ 00000001 = 11010001 (D1)
+        
+        response_bytes = bytes([0x00, 0xD0, 0x00, 0x01, 0xD1])
+        instance = self.mock_serial.return_value
+        instance.is_open = True
+        instance.read.return_value = response_bytes
+        
+        with self.tig:
+            is_on = self.tig.get_contactor()
+            self.assertTrue(is_on)
+            expected_tx = bytes([0x00, 0xD0, 0x00, 0x00, 0xD0])
+            instance.write.assert_called_with(expected_tx)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -22,11 +22,11 @@ CMD_ACTUAL_PDC_READ = 0xE6
 CMD_ACTUAL_UDC_READ = 0xE7
 CMD_ACTUAL_IDC_READ = 0xE8
 CMD_ACTUAL_FREQ_READ = 0xED
+CMD_CONTACTOR_WRITE = 0x50
+CMD_CONTACTOR_READ = 0xD0
 
 # Constants
 BAUDRATE = 9600
-
-
 class TIG20Error(Exception):
     """Base exception for TIG 20 errors."""
     pass
@@ -285,6 +285,25 @@ class TIG20:
         """Read Actual Frequency value (0...3000 [1/10 kHz])."""
         resp = self._send_command(CMD_ACTUAL_FREQ_READ)
         return resp['data']
+
+    def set_contactor(self, activate: bool):
+        """
+        Set Contactor (Schütz) state.
+        Args:
+            activate: True to activate (close contactor), False to deactivate.
+        """
+        val = 1 if activate else 0
+        self.logger.info(f"Setting Contactor to {'Activate' if activate else 'Deactivate'}")
+        self._send_command(CMD_CONTACTOR_WRITE, val)
+
+    def get_contactor(self) -> bool:
+        """
+        Read Contactor (Schütz) state.
+        Returns:
+            True if activated, False if deactivated.
+        """
+        resp = self._send_command(CMD_CONTACTOR_READ)
+        return resp['data'] == 1
 
     def get_status(self) -> dict:
         """

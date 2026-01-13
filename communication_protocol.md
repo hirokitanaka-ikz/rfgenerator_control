@@ -13,6 +13,8 @@
 - HEX CDH, Generator control mode read: 0=UDC, 1=IDC, 2=PDC
 - HEX 4FH: Generator operation status write: 0=off, 1=on
 - HEX CFH: Generator operation status read: 0=off, 1=on
+- HEX 50H, Contactor write: 0=deactivate, 1=activate
+- HEX D0H, Contactor read: 0=deactivated, 1=activated
 - HEX 51H, Reset error: 0=No Action, 1=Reset Error
 - HEX E1H, Read status (see status byte below)
 - HEX E3H, Number of error messages read
