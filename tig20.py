@@ -18,6 +18,10 @@ CMD_OPERATION_WRITE = 0x4F
 CMD_OPERATION_READ = 0xCF
 CMD_RESET_ERROR = 0x51
 CMD_GET_STATUS = 0xE1
+CMD_ACTUAL_PDC_READ = 0xE6
+CMD_ACTUAL_UDC_READ = 0xE7
+CMD_ACTUAL_IDC_READ = 0xE8
+CMD_ACTUAL_FREQ_READ = 0xED
 
 # Constants
 BAUDRATE = 9600
@@ -262,6 +266,26 @@ class TIG20:
         resp = self._send_command(CMD_OPERATION_READ)
         return resp['data'] == 1
 
+    def read_actual_power(self) -> int:
+        """Read Actual PDC (power) value (0 ... 1000)."""
+        resp = self._send_command(CMD_ACTUAL_PDC_READ)
+        return resp['data']
+
+    def read_actual_voltage(self) -> int:
+        """Read Actual UDC (voltage) value (0 ... 1000)."""
+        resp = self._send_command(CMD_ACTUAL_UDC_READ)
+        return resp['data']
+
+    def read_actual_current(self) -> int:
+        """Read Actual IDC (current) value (0 ... 1000)."""
+        resp = self._send_command(CMD_ACTUAL_IDC_READ)
+        return resp['data']
+
+    def read_actual_frequency(self) -> int:
+        """Read Actual Frequency value (0...3000 [1/10 kHz])."""
+        resp = self._send_command(CMD_ACTUAL_FREQ_READ)
+        return resp['data']
+
     def get_status(self) -> dict:
         """
         Query operating status.
@@ -320,6 +344,7 @@ class TIG20:
             # Raw data for debug if needed
             'raw_status_code': data
         }
+
 
     def emergency_off(self):
         """Force RF OFF and close connection."""

@@ -15,6 +15,13 @@
 - HEX CFH: Generator operation status read: 0=off, 1=on
 - HEX 51H, Reset error: 0=No Action, 1=Reset Error
 - HEX E1H, Read status (see status byte below)
+- HEX E3H, Number of error messages read
+- HEX E4H, Error information (function number) read
+- HEX E5H, Error information (error number) read
+- HEX E6H, Actual PDC (power) value read: 0 ... 1000 ‰
+- HEX E7H, Actual UDC (voltage) value read: 0 ... 1000 ‰
+- HEX E8H, Actual IDC (current) value read: 0 ... 1000 ‰
+- HEX EDH, Actual Frequency value read: 0...3000 [1/10 kHz]
 
 
 ## Status bytes

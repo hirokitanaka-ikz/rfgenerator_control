@@ -117,5 +117,91 @@ class TestTIG20(unittest.TestCase):
              pass # Success, it wasn't called
 
 
+
+    def test_read_actual_power(self):
+        """Test reading actual power."""
+        # CMD_ACTUAL_PDC_READ = 0xE6 (230)
+        # Checksum = 0 ^ 230 ^ 0 ^ 0 = 230 (0xE6)
+        # Response: Data = 500 (0x01F4).
+        # Checksum = 0 ^ 0xE6 ^ 0x01 ^ 0xF4 = 0xE6 ^ 0x1F5 = 0x13
+        
+        response_bytes = bytes([0x00, 0xE6, 0x01, 0xF4, 0x13])
+        
+        instance = self.mock_serial.return_value
+        instance.is_open = True
+        instance.read.return_value = response_bytes
+        
+        with self.tig:
+            val = self.tig.read_actual_power()
+            self.assertEqual(val, 500)
+            
+            # Expected TX: 00 E6 00 00 E6
+            expected_tx = bytes([0x00, 0xE6, 0x00, 0x00, 0xE6])
+            instance.write.assert_called_with(expected_tx)
+
+
+    def test_read_actual_voltage(self):
+        """Test reading actual voltage."""
+        # CMD_ACTUAL_UDC_READ = 0xE7
+        # Response: Data = 100 (0x0064)
+        # Checksum = 0 ^ 0xE7 ^ 0x00 ^ 0x64 = 0xE7 ^ 0x64 = 0x83
+        
+        response_bytes = bytes([0x00, 0xE7, 0x00, 0x64, 0x83])
+        
+        instance = self.mock_serial.return_value
+        instance.is_open = True
+        instance.read.return_value = response_bytes
+        
+        with self.tig:
+            val = self.tig.read_actual_voltage()
+            self.assertEqual(val, 100)
+            
+            # Expected TX: 00 E7 00 00 E7
+            expected_tx = bytes([0x00, 0xE7, 0x00, 0x00, 0xE7])
+            instance.write.assert_called_with(expected_tx)
+
+
+    def test_read_actual_current(self):
+        """Test reading actual current."""
+        # CMD_ACTUAL_IDC_READ = 0xE8
+        # Response: Data = 0
+        # Checksum = 0 ^ 0xE8 ^ 0 ^ 0 = 0xE8
+        
+        response_bytes = bytes([0x00, 0xE8, 0x00, 0x00, 0xE8])
+        
+        instance = self.mock_serial.return_value
+        instance.is_open = True
+        instance.read.return_value = response_bytes
+        
+        with self.tig:
+            val = self.tig.read_actual_current()
+            self.assertEqual(val, 0)
+            
+            # Expected TX: 00 E8 00 00 E8
+            expected_tx = bytes([0x00, 0xE8, 0x00, 0x00, 0xE8])
+            instance.write.assert_called_with(expected_tx)
+
+
+    def test_read_actual_frequency(self):
+        """Test reading actual frequency."""
+        # CMD_ACTUAL_FREQ_READ = 0xED
+        # Response: Data = 1356 (13.56 MHz?) 1356 = 0x054C
+        # Checksum = 0 ^ 0xED ^ 0x05 ^ 0x4C = 0xA4
+        
+        response_bytes = bytes([0x00, 0xED, 0x05, 0x4C, 0xA4])
+        
+        instance = self.mock_serial.return_value
+        instance.is_open = True
+        instance.read.return_value = response_bytes
+        
+        with self.tig:
+            val = self.tig.read_actual_frequency()
+            self.assertEqual(val, 1356)
+            
+            # Expected TX: 00 ED 00 00 ED
+            expected_tx = bytes([0x00, 0xED, 0x00, 0x00, 0xED])
+            instance.write.assert_called_with(expected_tx)
+
+
 if __name__ == '__main__':
     unittest.main()
